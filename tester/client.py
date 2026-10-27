@@ -1,11 +1,13 @@
-"""Client HTTP de l'API Frankfurter avec timeout et une seule tentative de reprise."""
+"""Client HTTP Frankfurter avec timeout et un seul retry en cas d'erreur temporaire."""
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 from typing import Any
-
-import requests
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 BASE_URL = "https://api.frankfurter.app"
 TIMEOUT_SECONDS = 4
@@ -23,51 +25,56 @@ class ApiResponse:
 
 
 def get(path: str, params: dict[str, str] | None = None) -> ApiResponse:
-    """Effectue une requête GET et mesure le temps total d'une tentative réussie."""
+    """Effectue un GET et renvoie le statut, le JSON éventuel et la latence."""
     url = f"{BASE_URL}{path}"
-    last_error = None
+    if params:
+        url = f"{url}?{urlencode(params)}"
+
+    last_error: str | None = None
+    last_elapsed_ms = 0.0
 
     for attempt in range(MAX_ATTEMPTS):
         started = time.perf_counter()
         try:
-            response = requests.get(url, params=params, timeout=TIMEOUT_SECONDS)
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            content_type = response.headers.get("Content-Type", "")
+            req = Request(url, headers={"Accept": "application/json", "User-Agent": "atelier-api-monitor/1.0"})
+            with urlopen(req, timeout=TIMEOUT_SECONDS) as response:
+                body = response.read()
+                last_elapsed_ms = (time.perf_counter() - started) * 1000
+                content_type = response.headers.get("Content-Type", "")
+                try:
+                    data = json.loads(body.decode("utf-8"))
+                except (ValueError, UnicodeDecodeError):
+                    data = None
+                return ApiResponse(
+                    url=response.geturl(),
+                    status_code=response.status,
+                    content_type=content_type,
+                    elapsed_ms=last_elapsed_ms,
+                    json_data=data,
+                )
+        except HTTPError as exc:
+            last_elapsed_ms = (time.perf_counter() - started) * 1000
+            last_error = f"HTTP {exc.code}"
+            content_type = exc.headers.get("Content-Type", "") if exc.headers else ""
             try:
-                json_data = response.json()
-            except ValueError:
-                json_data = None
+                data = json.loads(exc.read().decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                data = None
 
-            # Retry uniquement sur 429 et erreurs serveur temporaires.
-            if response.status_code == 429 or response.status_code >= 500:
-                last_error = f"HTTP {response.status_code}"
-                if attempt + 1 < MAX_ATTEMPTS:
-                    retry_after = response.headers.get("Retry-After")
-                    try:
-                        delay = min(float(retry_after), 2.0) if retry_after else 0.5
-                    except ValueError:
-                        delay = 0.5
-                    time.sleep(max(delay, 0))
-                    continue
+            if (exc.code == 429 or exc.code >= 500) and attempt + 1 < MAX_ATTEMPTS:
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                try:
+                    delay = min(float(retry_after), 2.0) if retry_after else 0.5
+                except ValueError:
+                    delay = 0.5
+                time.sleep(max(delay, 0.0))
+                continue
 
-            return ApiResponse(
-                url=response.url,
-                status_code=response.status_code,
-                content_type=content_type,
-                elapsed_ms=elapsed_ms,
-                json_data=json_data,
-                error=last_error,
-            )
-        except requests.RequestException as exc:
+            return ApiResponse(url, exc.code, content_type, last_elapsed_ms, data, last_error)
+        except (URLError, TimeoutError, OSError) as exc:
+            last_elapsed_ms = (time.perf_counter() - started) * 1000
             last_error = f"{type(exc).__name__}: {exc}"
             if attempt + 1 < MAX_ATTEMPTS:
                 time.sleep(0.3)
 
-    return ApiResponse(
-        url=url,
-        status_code=None,
-        content_type="",
-        elapsed_ms=TIMEOUT_SECONDS * 1000,
-        json_data=None,
-        error=last_error or "Erreur réseau inconnue",
-    )
+    return ApiResponse(url, None, "", last_elapsed_ms, None, last_error or "Erreur réseau inconnue")
