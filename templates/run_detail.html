@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Détail du run #{{ run.id }}</title>
+<style>body{margin:0;background:#0b1020;color:#e9edff;font-family:system-ui,Arial;line-height:1.5}main{max-width:950px;margin:auto;padding:24px}.card{background:#121a33;border:1px solid #2a365f;border-radius:14px;padding:18px;margin:14px 0}a{color:#77baff}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #2a365f;vertical-align:top}pre{white-space:pre-wrap;overflow:auto}.pass{color:#62d6a0}.fail{color:#ff6b7a}.muted{color:#aab4d4}</style></head>
+<body><main>
+<p><a href="{{ url_for('dashboard') }}">← Retour au dashboard</a></p>
+<section class="card"><h1>Exécution #{{ run.id }}</h1><p class="muted">{{ run.timestamp }} · {{ run.api }} · {{ run.duration_ms }} ms</p>
+<p>Réussis : <b class="pass">{{ run.summary.passed }}</b> · Échoués : <b class="fail">{{ run.summary.failed }}</b> · Latence moyenne : {{ run.summary.latency_ms_avg }} ms · p95 : {{ run.summary.latency_ms_p95 }} ms</p></section>
+<section class="card"><h2>Tests</h2><table><thead><tr><th>Test</th><th>Résultat</th><th>HTTP</th><th>Latence</th><th>Détails</th><th>URL</th></tr></thead><tbody>
+{% for test in run.tests %}<tr><td>{{ test.name }}</td><td class="{{ 'pass' if test.status == 'PASS' else 'fail' }}">{{ test.status }}</td><td>{{ test.status_code if test.status_code is not none else '—' }}</td><td>{{ test.latency_ms }} ms</td><td>{{ test.details }}</td><td>{% if test.url %}<a href="{{ test.url }}" target="_blank" rel="noopener">API</a>{% endif %}</td></tr>{% endfor %}
+</tbody></table></section>
+<section class="card"><h2>Résultat JSON</h2><pre>{{ run | tojson(indent=2) }}</pre></section></main></body></html>
