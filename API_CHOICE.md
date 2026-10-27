@@ -1,13 +1,23 @@
 # API Choice
 
-- Étudiant :
-- API choisie :
-- URL base :
-- Documentation officielle / README :
-- Auth : None / API Key / OAuth
+- Étudiant : Alle Amar
+- API choisie : Frankfurter (taux de change)
+- URL base : https://api.frankfurter.app
+- Documentation officielle / README : https://frankfurter.dev/
+- Auth : None (aucune clé API requise pour les endpoints publics utilisés)
 - Endpoints testés :
-  - GET ...
-  - GET ...
+  - GET /latest?from=EUR
+  - GET /latest?from=USD&to=EUR
 - Hypothèses de contrat (champs attendus, types, codes) :
+  - Une requête valide renvoie HTTP 200.
+  - Le corps de réponse est un objet JSON.
+  - La réponse contient les champs `amount` (nombre), `base` (chaîne), `date` (chaîne au format date) et `rates` (objet de taux).
+  - Pour `from=EUR`, le champ `base` attendu est `EUR` et `rates` est un objet.
+  - Pour `from=USD&to=EUR`, si la requête est acceptée et qu'un taux est publié, `rates` contient la clé `EUR` avec une valeur numérique.
+  - Les tests vérifient le contrat observé sans modifier de données côté fournisseur.
 - Limites / rate limiting connu :
+  - API publique sans clé. Éviter les appels fréquents et limiter chaque exécution à quelques requêtes.
+  - Un délai d'attente court et une seule nouvelle tentative maximum seront implémentés.
 - Risques (instabilité, downtime, CORS, etc.) :
+  - Le service peut être temporairement indisponible, lent ou renvoyer des erreurs HTTP.
+  - Les taux publiés dépendent des données disponibles et de la date de mise à jour ; les tests ne doivent pas supposer une valeur de taux fixe.
