@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API Watch — Dashboard</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --card:#121a33; --text:#e9edff; --muted:#aab4d4; --blue:#77baff; --green:#62d6a0; --red:#ff6b7a; --line:#29365f; }
+    * { box-sizing:border-box }
+    body { margin:0; padding:28px 16px; font:16px/1.5 system-ui,Segoe UI,Arial,sans-serif; color:var(--text); background:radial-gradient(900px 500px at 5% 0%,#172257,var(--bg) 70%); }
+    main { max-width:1100px; margin:auto }
+    a { color:var(--blue); text-decoration:none } a:hover { text-decoration:underline }
+    h1 { margin:0 } .muted { color:var(--muted) }
+    .top { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px }
+    .actions { display:flex; flex-wrap:wrap; gap:8px }
+    button,.button { display:inline-block; border:1px solid #41618c; color:var(--text); background:#1b3156; border-radius:10px; padding:10px 14px; cursor:pointer; font:inherit }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:22px 0 }
+    .card { background:rgba(18,26,51,.94); border:1px solid var(--line); border-radius:14px; padding:16px; overflow:auto }
+    .metric { font-size:26px; font-weight:700; margin-top:6px } table { width:100%; border-collapse:collapse; font-size:14px }
+    th,td { padding:10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top }
+    th { color:var(--muted) }.pass { color:var(--green); font-weight:700 }.fail { color:var(--red); font-weight:700 }
+    details { margin:6px 0 } pre { white-space:pre-wrap; overflow-wrap:anywhere }
+    @media (max-width:650px) { body { padding:16px 10px } th,td { padding:7px } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><h1>API Watch</h1><div class="muted">Surveillance automatisée de l’API Frankfurter</div></div>
+    <div class="actions">
+      <form action="/run" method="post"><button type="submit">Exécuter les tests</button></form>
+      <a class="button" href="/export.json">Exporter JSON</a>
+      <a class="button" href="/health">Santé API</a>
+    </div>
+  </div>
+
+  {% if latest %}
+  <div class="cards">
+    <section class="card"><div class="muted">Dernière exécution</div><div class="metric">#{{ latest.id }}</div><div class="muted">{{ latest.timestamp }}</div></section>
+    <section class="card"><div class="muted">Tests réussis</div><div class="metric">{{ latest.passed }}</div></section>
+    <section class="card"><div class="muted">Tests échoués</div><div class="metric">{{ latest.failed }}</div></section>
+    <section class="card"><div class="muted">Disponibilité du run</div><div class="metric">{{ '%.1f'|format(latest.availability) }}%</div></section>
+    <section class="card"><div class="muted">Latence moyenne</div><div class="metric">{{ latest.latency_avg if latest.latency_avg is not none else '—' }} ms</div></section>
+    <section class="card"><div class="muted">Latence p95</div><div class="metric">{{ latest.latency_p95 if latest.latency_p95 is not none else '—' }} ms</div></section>
+  </div>
+  <section class="card">
+    <h2>Détails du dernier run</h2>
+    {% for test in latest.tests %}
+      <details>
+        <summary><span class="{{ 'pass' if test.status == 'PASS' else 'fail' }}">{{ test.status }}</span> — {{ test.name }}{% if test.latency_ms is not none %} ({{ test.latency_ms }} ms){% endif %}</summary>
+        <p>{{ test.details }}</p>
+      </details>
+    {% endfor %}
+  </section>
+  {% else %}
+  <section class="card"><h2>Aucun test exécuté</h2><p>Clique sur « Exécuter les tests » pour réaliser le premier run et enregistrer ses résultats.</p></section>
+  {% endif %}
+
+  <section class="card" style="margin-top:14px">
+    <h2>Historique des exécutions</h2>
+    {% if history %}
+    <table>
+      <thead><tr><th>ID</th><th>Date</th><th>Réussis</th><th>Échoués</th><th>Taux d’erreur</th><th>Latence moyenne</th><th></th></tr></thead>
+      <tbody>
+      {% for run in history %}
+        <tr>
+          <td>#{{ run.id }}</td><td>{{ run.timestamp }}</td><td class="pass">{{ run.passed }}</td><td class="fail">{{ run.failed }}</td>
+          <td>{{ '%.1f'|format(run.error_rate * 100) }}%</td><td>{{ run.latency_avg if run.latency_avg is not none else '—' }} ms</td>
+          <td><a href="/run/{{ run.id }}">Détails</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">L’historique apparaîtra après le premier run.</p>{% endif %}
+  </section>
+  <p class="muted">Les mesures de latence représentent le temps des requêtes HTTP observées pendant les tests ; un échec réseau peut empêcher une latence d’être mesurée.</p>
+</main>
+</body>
+</html>
