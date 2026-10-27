@@ -5,71 +5,99 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+concurrency:
+  group: pythonanywhere-deploy
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Validate required secrets
         shell: bash
+        env:
+          PA_USERNAME: ${{ secrets.PA_USERNAME }}
+          PA_TOKEN: ${{ secrets.PA_TOKEN }}
+          PA_TARGET_DIR: ${{ secrets.PA_TARGET_DIR }}
+          PA_WEBAPP_DOMAIN: ${{ secrets.PA_WEBAPP_DOMAIN }}
         run: |
           set -euo pipefail
-          : "${{ secrets.PA_USERNAME }}"
-          : "${{ secrets.PA_TOKEN }}"
-          : "${{ secrets.PA_TARGET_DIR }}"
-          : "${{ secrets.PA_WEBAPP_DOMAIN }}"
+          test -n "$PA_USERNAME" || { echo "Secret PA_USERNAME absent"; exit 1; }
+          test -n "$PA_TOKEN" || { echo "Secret PA_TOKEN absent"; exit 1; }
+          test -n "$PA_TARGET_DIR" || { echo "Secret PA_TARGET_DIR absent"; exit 1; }
+          test -n "$PA_WEBAPP_DOMAIN" || { echo "Secret PA_WEBAPP_DOMAIN absent"; exit 1; }
 
-      - name: Upload all files recursively (dirs auto-created by Files API)
+      - name: Upload files with rate-limit retry
         shell: bash
+        env:
+          PA_USERNAME: ${{ secrets.PA_USERNAME }}
+          PA_TOKEN: ${{ secrets.PA_TOKEN }}
+          PA_TARGET_DIR: ${{ secrets.PA_TARGET_DIR }}
+          PA_WEBAPP_DOMAIN: ${{ secrets.PA_WEBAPP_DOMAIN }}
+          PA_HOST: ${{ secrets.PA_HOST }}
         run: |
           set -euo pipefail
-          USER="${{ secrets.PA_USERNAME }}"
-          TOKEN="${{ secrets.PA_TOKEN }}"
-          TARGET_DIR="${{ secrets.PA_TARGET_DIR }}"
-          DOMAIN="${{ secrets.PA_WEBAPP_DOMAIN }}"
-
-          # Optional: set PA_HOST secret to "eu.pythonanywhere.com" if your account is on EU.
-          HOST="${{ secrets.PA_HOST }}"
-          if [[ -z "${HOST}" ]]; then HOST="www.pythonanywhere.com"; fi
-
+          HOST="${PA_HOST:-www.pythonanywhere.com}"
           echo "Using PythonAnywhere host: ${HOST}"
-          echo "Target directory: ${TARGET_DIR}"
+          echo "Target directory: ${PA_TARGET_DIR}"
 
-          # Upload every file; remote directories are created automatically by the Files API.
+          upload_file() {
+            local file="$1"
+            local destination="$2"
+            local attempt=1
+            local max_attempts=5
+            while (( attempt <= max_attempts )); do
+              local status
+              status=$(curl -sS -o /tmp/pa_response.txt -w "%{http_code}" -X POST \
+                -H "Authorization: Token ${PA_TOKEN}" \
+                -F "content=@${file}" \
+                "https://${HOST}/api/v0/user/${PA_USERNAME}/files/path${destination}" || true)
+              if [[ "$status" =~ ^2 ]]; then
+                return 0
+              fi
+              if [[ "$status" == "429" || "$status" =~ ^5 ]]; then
+                local wait_seconds=$((attempt * 3))
+                echo "Temporary HTTP ${status} for ${destination}; retry ${attempt}/${max_attempts} in ${wait_seconds}s"
+                sleep "$wait_seconds"
+                ((attempt+=1))
+                continue
+              fi
+              echo "Upload failed for ${destination}: HTTP ${status}"
+              cat /tmp/pa_response.txt || true
+              return 1
+            done
+            echo "Upload stopped after ${max_attempts} attempts: ${destination}"
+            cat /tmp/pa_response.txt || true
+            return 1
+          }
+
           while IFS= read -r -d '' file; do
             rel="${file#./}"
-
-            # Exclusions (adjust to taste)
             case "$rel" in
               .git/*|.github/*|.venv/*|__pycache__/*|node_modules/*) continue ;;
               *.pyc|.DS_Store) continue ;;
             esac
-
-            remote_path="${TARGET_DIR}/${rel}"
-            echo " - ${rel} -> ${remote_path}"
-
-            curl -sS --fail -X POST \
-              -H "Authorization: Token ${TOKEN}" \
-              -F "content=@${file}" \
-              "https://${HOST}/api/v0/user/${USER}/files/path${remote_path}" \
-              >/dev/null
-
+            remote_path="${PA_TARGET_DIR}/${rel}"
+            echo "Uploading ${rel}"
+            upload_file "$file" "$remote_path"
+            # Limite la fréquence des appels à l'API Files.
+            sleep 1
           done < <(
             find . \
               -type d \( -name .git -o -name .github -o -name .venv -o -name __pycache__ -o -name node_modules \) -prune -false \
-              -o -type f \
-                ! -name ".DS_Store" \
-                ! -name "*.pyc" \
-                -print0
+              -o -type f ! -name ".DS_Store" ! -name "*.pyc" -print0
           )
 
-          echo "Reloading webapp ${DOMAIN}..."
-          curl -sS --fail -X POST \
-            -H "Authorization: Token ${TOKEN}" \
-            "https://${HOST}/api/v0/user/${USER}/webapps/${DOMAIN}/reload/" \
-            >/dev/null
-
-          echo "Deployed. Try: https://${DOMAIN}/"
+          echo "Reloading webapp ${PA_WEBAPP_DOMAIN}..."
+          status=$(curl -sS -o /tmp/pa_reload.txt -w "%{http_code}" -X POST \
+            -H "Authorization: Token ${PA_TOKEN}" \
+            "https://${HOST}/api/v0/user/${PA_USERNAME}/webapps/${PA_WEBAPP_DOMAIN}/reload/" || true)
+          if [[ ! "$status" =~ ^2 ]]; then
+            echo "Reload failed: HTTP ${status}"
+            cat /tmp/pa_reload.txt || true
+            exit 1
+          fi
+          echo "Deployed. Try: https://${PA_WEBAPP_DOMAIN}/"
