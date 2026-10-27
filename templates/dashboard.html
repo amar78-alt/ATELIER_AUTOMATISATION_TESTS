@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard API — Frankfurter</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --card:#121a33; --text:#e9edff; --muted:#aab4d4; --line:#2a365f; --accent:#77baff; --ok:#62d6a0; --bad:#ff6b7a; }
+    * { box-sizing:border-box; } body { margin:0; font-family:system-ui,Segoe UI,Arial,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+    header, main { max-width:1100px; margin:auto; padding:20px; } h1,h2 { margin-top:0; } a { color:var(--accent); }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; } .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin:14px 0; }
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; } .kpi { padding:14px; border:1px solid var(--line); border-radius:12px; }
+    .kpi small { color:var(--muted); display:block; } .kpi b { font-size:1.5rem; } .muted { color:var(--muted); }
+    button { padding:10px 14px; border-radius:9px; border:1px solid #477bb0; background:#1e4268; color:white; cursor:pointer; font-weight:600; }
+    table { width:100%; border-collapse:collapse; font-size:14px; } th,td { text-align:left; padding:9px; border-bottom:1px solid var(--line); vertical-align:top; } th { color:#cddcff; } .pass { color:var(--ok); font-weight:700; } .fail { color:var(--bad); font-weight:700; }
+    pre { overflow:auto; white-space:pre-wrap; word-break:break-word; } @media(max-width:650px){ table { display:block; overflow-x:auto; } }
+  </style>
+</head>
+<body>
+<header>
+  <div class="row"><h1>Monitoring API — Frankfurter</h1><span class="muted">Testing as Code · QoS</span></div>
+  <p class="muted">Vérification du contrat HTTP/JSON, mesures de latence et historique des exécutions.</p>
+  <div class="row">
+    <form method="post" action="{{ url_for('run_tests_route') }}" onsubmit="return confirm('Lancer les 6 tests API ?');">
+      <button type="submit">▶ Lancer les tests</button>
+    </form>
+    <a href="{{ url_for('health') }}">État de santé /health</a>
+    <a href="{{ url_for('export_runs') }}">Exporter l'historique JSON</a>
+    <a href="{{ url_for('consignes') }}">Consignes de l'atelier</a>
+  </div>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}<div class="card">{{ messages[0] }}</div>{% endif %}
+  {% endwith %}
+</header>
+<main>
+  {% if latest %}
+  <section class="card">
+    <h2>Dernière exécution — #{{ latest.id }}</h2>
+    <p class="muted">Date : {{ latest.timestamp }} · Durée du run : {{ latest.duration_ms }} ms</p>
+    <div class="kpis">
+      <div class="kpi"><small>Tests réussis</small><b class="pass">{{ latest.summary.passed }}/{{ latest.summary.total }}</b></div>
+      <div class="kpi"><small>Tests échoués</small><b class="fail">{{ latest.summary.failed }}</b></div>
+      <div class="kpi"><small>Taux d'erreur des tests</small><b>{{ (latest.summary.error_rate * 100)|round(1) }}%</b></div>
+      <div class="kpi"><small>Disponibilité calculée</small><b>{{ latest.summary.availability }}%</b></div>
+      <div class="kpi"><small>Latence moyenne</small><b>{{ latest.summary.latency_ms_avg }} ms</b></div>
+      <div class="kpi"><small>Latence p95</small><b>{{ latest.summary.latency_ms_p95 }} ms</b></div>
+    </div>
+    <h3>Détail des tests</h3>
+    <table><thead><tr><th>Test</th><th>Résultat</th><th>HTTP</th><th>Latence</th><th>Détails</th></tr></thead><tbody>
+    {% for test in latest.tests %}
+      <tr><td>{{ test.name }}</td><td class="{{ 'pass' if test.status == 'PASS' else 'fail' }}">{{ test.status }}</td><td>{{ test.status_code if test.status_code is not none else '—' }}</td><td>{{ test.latency_ms }} ms</td><td>{{ test.details }}</td></tr>
+    {% endfor %}
+    </tbody></table>
+  </section>
+  {% else %}
+  <section class="card"><h2>Aucune exécution</h2><p>Lance les tests pour afficher les métriques et alimenter l'historique.</p></section>
+  {% endif %}
+  <section class="card">
+    <h2>Historique SQLite</h2>
+    {% if runs %}
+    <table><thead><tr><th>ID</th><th>Date</th><th>API</th><th>Pass</th><th>Fail</th><th>Erreur</th><th>Disponibilité</th><th>Latence moyenne</th><th>p95</th><th>Détails</th></tr></thead><tbody>
+      {% for run in runs %}
+      <tr><td>#{{ run.id }}</td><td>{{ run.timestamp }}</td><td>{{ run.api }}</td><td class="pass">{{ run.passed }}</td><td class="fail">{{ run.failed }}</td><td>{{ (run.error_rate * 100)|round(1) }}%</td><td>{{ run.availability }}%</td><td>{{ run.latency_avg }} ms</td><td>{{ run.latency_p95 }} ms</td><td><a href="{{ url_for('run_detail', run_id=run.id) }}">Voir</a></td></tr>
+      {% endfor %}
+    </tbody></table>
+    {% else %}<p class="muted">Aucun historique pour le moment.</p>{% endif %}
+  </section>
+</main>
+</body></html>
