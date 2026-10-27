@@ -1,76 +1,91 @@
-------------------------------------------------------------------------------------------------------
-🎯Atelier “Testing as Code & API Monitoring”
-------------------------------------------------------------------------------------------------------
-Aujourd’hui, vous allez passer du rôle de développeur au rôle d’ingénieur qualité.  
-  
-Internet est rempli d’API publiques : météo, devises, citations, géolocalisation, données statistiques…
-Mais une API, ce n’est pas juste une URL qui répond. C’est un service.
-Et un service doit être fiable, mesurable et surveillé.  
-  
-Votre mission :  
-  
-👉 Choisir une API publique.  
-👉 Concevoir et implémenter une solution d’automatisation des tests.  
-👉 Déployer votre solution sur PythonAnywhere.  
-👉 Mesurer et exposer des indicateurs de qualité de service.    
-  
--------------------------------------------------------------------------------------------------------
-🧩 Séquence 1 : GitHUB
--------------------------------------------------------------------------------------------------------
-Objectif : Création d'un Repository GitHUB pour travailler avec son projet  
-Difficulté : Très facile (~10 minutes)
--------------------------------------------------------------------------------------------------------
-**Faites un Fork de ce projet**. Si besoin, voici une vidéo d'accompagnement pour vous aider à "Forker" un Repository Github : [Forker ce projet](https://youtu.be/p33-7XQ29zQ)  
+# Atelier — Testing as Code & API Monitoring
 
----------------------------------------------------
-🧩 Séquence 2 : Création d'un site chez Pythonanywhere
----------------------------------------------------
-Objectif : Créer un hébergement sur Pythonanywhere  
-Difficulté : Faible (~10 minutes)
----------------------------------------------------
+## Objectif
+Application Flask qui exécute des tests de contrat sur l'API publique Frankfurter, mesure quelques indicateurs de QoS et conserve l'historique des exécutions en SQLite.
 
-Rendez-vous sur **https://www.pythonanywhere.com/** et créez vous un compte. Puis créez un serveur Web **Flask 3.13**. 
-  
----------------------------------------------------------------------------------------------
-🧩 Séquence 3 : Les Actions GitHUB (Industrialisation Continue)
----------------------------------------------------------------------------------------------
-Objectif : Automatiser la mise à jour de votre hébergement Pythonanywhere  
-Difficulté : Moyenne (~15 minutes)
----------------------------------------------------------------------------------------------
-Dans le Repository GitHUB que vous venez de créer précédemment lors de la séquence 1, vous avez un fichier intitulé deploy-pythonanywhere.yml et qui est déposé dans le répertoire .github/workflows. Ce fichier a pour objectif d'automatiser le déploiement de votre code sur votre site Pythonanywhere. Pour information, c'est ce que l'on appel des Actions GitHUB. Ce sont des scripts qui s'exécutent automatiquement lors de chaque Commit dans votre projet (C'est à dire à chaque modification de votre code). Ces scripts (appelés actions) sont au format yml qui est un format structuré proche de celui d'XML.  
+API utilisée : https://api.frankfurter.app  
+Documentation : https://www.frankfurter.app/docs/
 
-Pour utiliser cette Action (deploy-pythonanywhere.yml), **vous avez besoin de créer des secrets dans GitHUB** afin de ne pas divulguer des informations sensibles aux internautes de passage dans votre Repository comme vos login et password par exemple.  
+## Fonctionnalités
+- Six tests de contrat : HTTP/JSON, schéma de /latest, taux EUR→USD, /currencies, types des devises et paramètre de devise invalide.
+- Client HTTP avec timeout de 4 s et un seul retry au maximum pour timeout réseau, HTTP 429 et erreurs serveur 5xx.
+- Mesures calculées : latence moyenne, p95, taux d'échec des tests et disponibilité estimée de la suite.
+- Application Flask avec page de consignes, dashboard, lancement manuel, détail de run, endpoint de santé et export JSON.
+- Persistance de l'historique via SQLite.
+- Workflow GitHub Actions pour tests unitaires et vérification de syntaxe à chaque push/PR sur main.
+- Script compatible avec une Scheduled Task PythonAnywhere.
 
-Pour cet atelier, **vous avez 4 secrets à créer** dans votre Repository GitHUB : **Settings → Secrets and variables → Actions → New repository secret**  
-  
-**PA_USERNAME** = votre username PythonAnywhere.  
-**PA_TOKEN** = votre API token. Token à créer dans pythonanywhere (Acount → API Token).  
-**PA_TARGET_DIR** = Web → Source code (ex: /home/monuser/myapp).  
-**PA_WEBAPP_DOMAIN** = votre site (ex: monuser.pythonanywhere.com).  
-  
-**Dernière étape :** Pour engager l'automatisation de votre première Action, vous devez cliquer sur le gros boutton vert dans l'onglet supérieur [Actions] dans votre Repository Github. Le boutton s'intitule "I understand my workflows, go ahead and enable them". Ensuite procédez à une "petite" modification de votre fichier README.md GitHub puis faites un [Commit] pour déclancher l'action.   
+## Structure du projet
+```text
+.
+├── flask_app.py
+├── storage.py
+├── scheduled_run.py
+├── run_tests.py
+├── requirements.txt
+├── API_CHOICE.md
+├── tester/
+│   ├── __init__.py
+│   ├── client.py
+│   ├── tests.py
+│   └── runner.py
+├── tests/
+│   └── test_runner.py
+├── templates/
+│   ├── consignes.html
+│   ├── dashboard.html
+│   └── run_detail.html
+└── .github/workflows/
+    ├── deploy-pythonanywhere.yml
+    └── test-api.yml
+```
 
-Notions acquises de cette séquence :  
-Vous avez vu dans cette séquence comment créer des secrets GiHUB afin de mettre en place de l'industrialisation continue.   
-  
----------------------------------------------------
-🔹 Séquence 4 : Atelier
----------------------------------------------------
-Objectif : Travailler sur l'automatisation de vos tests  
-Difficulté : Moyenne (~120 minutes)
----------------------------------------------------
-**Consignes : Retrouvez les consignes de votre atelier sur votre site pythonanywhere**    
-Vous pouvez retrouver le travail demandé dans le cadre de cet atelier directement sur votre site pythonanywhere (ex: monuser.pythonanywhere.com).    
-   
---------------------------------------------------------------------
-🧠 Troubleshooting :
----------------------------------------------------
-Objectif : Visualiser ses logs et découvrir ses erreurs
----------------------------------------------------
-Lors de vos développements, vous serez peut-être confronté à des erreurs systèmes car vous avez faits des erreurs de syntaxes dans votre code, faits de mauvaises déclarations de fonctions, appelez des modules inexistants, mal renseigner vos secrets, etc…  
-Les causes d'erreurs sont quasi illimitées. **Vous devez donc vous tourner vers les logs de votre système pour comprendre d'où vient le problème** :  
+## Exécution locale
+Python 3.10+ recommandé.
 
-Vos log sont accéssible via les URL suivantes :  
-* Access log : {site}.pythonanywhere.com.access.log
-* Error log : {site}.pythonanywhere.com.error.log
-* Server log: {site}.pythonanywhere.com.server.log
+```bash
+python -m venv .venv
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+# macOS/Linux
+# source .venv/bin/activate
+
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+python run_tests.py
+python flask_app.py
+```
+
+Puis ouvrir http://127.0.0.1:5000/ pour les consignes et http://127.0.0.1:5000/dashboard pour le dashboard.
+
+## Routes
+- `GET /` : consignes de l'atelier.
+- `GET /dashboard` : dernier run et historique.
+- `POST /run` : lance les six tests et enregistre le résultat.
+- `GET /runs/<id>` : détail d'une exécution.
+- `GET /health` : statut de l'application en JSON.
+- `GET /export.json` : téléchargement de l'historique au format JSON.
+
+## Déploiement PythonAnywhere
+Le workflow `.github/workflows/deploy-pythonanywhere.yml` utilise les secrets de dépôt :
+- `PA_USERNAME` : nom d'utilisateur PythonAnywhere.
+- `PA_TOKEN` : API token PythonAnywhere.
+- `PA_TARGET_DIR` : répertoire de code de l'application.
+- `PA_WEBAPP_DOMAIN` : domaine de l'application, sans protocole.
+
+Après le déploiement, vérifie la configuration WSGI et installe les dépendances dans l'environnement virtuel lié à l'application. Si l'application hébergée ne recharge pas automatiquement les dépendances, exécute `pip install -r /home/<username>/mysite/requirements.txt` dans la console PythonAnywhere adaptée, puis recharge la Web app.
+
+**Attention au dossier de destination :** l'action téléverse/remplace les fichiers correspondants, mais ne supprime pas les fichiers distants qui n'existent plus dans GitHub. L'action recharge l'application configurée par `PA_WEBAPP_DOMAIN`.
+
+## Tâche planifiée
+Dans PythonAnywhere, crée une tâche planifiée qui exécute `scheduled_run.py` avec l'interpréteur Python de ton environnement virtuel, par exemple toutes les heures. Le script exécute la suite et écrit l'historique dans SQLite. Vérifie que le répertoire de travail et `ATELIER_DB_PATH` restent stables entre l'application Web et la tâche planifiée.
+
+## Notes sur les métriques
+- Le taux d'erreur correspond à la part de tests en échec dans la suite, ce n'est pas un taux d'erreur global mesuré sur le service distant.
+- La disponibilité est une estimation basée sur la proportion de tests réussis lors d'un run.
+- Le p95 est calculé sur les latences mesurées par les tests de ce run.
+- Les tests sont en lecture seule. La suite utilise au plus six tests logiques, avec un maximum d'un retry par appel.
+- Les valeurs obtenues dépendent de la disponibilité et de la latence de l'API publique au moment du test.
+
+## Troubleshooting
+Consulte les logs d'erreur et de serveur depuis l'onglet Web de PythonAnywhere. Les erreurs fréquentes incluent les dépendances non installées, un mauvais chemin WSGI ou un répertoire SQLite non accessible en écriture.
